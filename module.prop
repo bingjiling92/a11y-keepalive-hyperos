@@ -1,0 +1,6 @@
+id=a11y_keepalive_v2
+name=A11y KeepAlive
+version=v3.2-fix
+versionCode=8
+author=Operit
+description=持续保持指定应用的无障碍开关为开启状态，对抗澎湃OS 3.x无障碍强杀。v3.2修复：①状态/日志改写/data/adb(旧版写FUSE静默失败导致"看起来失效") ②看门狗30秒复活+卡死重启(修复被系统卡掉后永久失效) ③dumpsys加超时(binder卡死不再拖死循环) ④目标app压oom_score防LMK杀进程 ⑤状态每轮刷新，管理器显示真实运行状态。
