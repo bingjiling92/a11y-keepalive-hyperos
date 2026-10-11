@@ -3,11 +3,12 @@
 # start/stop/status/state/toggle/restart
 
 MODDIR="${0%/*}"
-STATE_FILE="/data/media/0/Android/a11y_keepalive.state"
-LOG_PATH="/data/media/0/Android/a11y_keepalive.log"
+STATE_FILE="/data/adb/a11y_keepalive/a11y_keepalive.state"
+LOG_PATH="/data/adb/a11y_keepalive/a11y_keepalive.log"
 
 monitor_pid() {
-	ps -ef 2>/dev/null | grep '[M]onitor_Process.sh' | awk 'NR==1{print $2}'
+	# 锚定匹配(与 watchdog 一致), 防止误杀命令行含此文件名的其他进程
+	pgrep -f "^sh ${MODDIR}/Monitor_Process[.]sh$" 2>/dev/null | head -1
 }
 
 is_running() {
@@ -15,21 +16,19 @@ is_running() {
 	[ -n "$(monitor_pid)" ]
 }
 
-move_to_system_cgroup() {
+protect_pid() {
+	# v3.2: 旧版 move_to_system_cgroup 写的 uid_0 路径在本ROM不存在(全部静默失败)，
+	# 且 /dev/cpuset/background 会把进程限到小核——反效果。改为直接压 oom_score_adj。
 	pid="$1"
 	[ -z "${pid}" ] && return 1
-	# KernelSU WebUI 启动的进程会继承管理器 app cgroup，离开页面后可能被冻结。
-	# 移到 system/background；失败不影响后续启动。
-	echo "${pid}" > /sys/fs/cgroup/system/uid_0/cgroup.procs 2>/dev/null
-	echo "${pid}" > /dev/cpuset/background/tasks 2>/dev/null
-	echo "${pid}" > /dev/cpuctl/background/tasks 2>/dev/null
+	echo "-1000" > "/proc/${pid}/oom_score_adj" 2>/dev/null
 	return 0
 }
 
 start_monitor() {
 	rm -f "${MODDIR}/disable" 2>/dev/null
 	if is_running; then
-		move_to_system_cgroup "$(monitor_pid)"
+		protect_pid "$(monitor_pid)"
 		echo "running"
 		return 0
 	fi
@@ -37,7 +36,7 @@ start_monitor() {
 	# 每次启动使用最新 Monitor.sh，避免旧 Monitor_Process.sh 缓存。
 	cp -f "${MODDIR}/config/Monitor.sh" "${MODDIR}/Monitor_Process.sh" 2>/dev/null
 	chmod 0755 "${MODDIR}/Monitor_Process.sh" 2>/dev/null
-	mkdir -p /data/media/0/Android 2>/dev/null
+	mkdir -p /data/adb/a11y_keepalive 2>/dev/null
 	echo "A11y KeepAlive：正在启动" > "${STATE_FILE}" 2>/dev/null
 
 	( exec setsid sh "${MODDIR}/Monitor_Process.sh" >/dev/null 2>&1 </dev/null & ) 2>/dev/null
@@ -47,12 +46,12 @@ start_monitor() {
 	sleep 1
 	pid="$(monitor_pid)"
 	if [ -n "${pid}" ]; then
-		move_to_system_cgroup "${pid}"
+		protect_pid "${pid}"
 		echo "running"
 		return 0
 	fi
 	echo "A11y KeepAlive：启动失败，请查看运行日志" > "${STATE_FILE}" 2>/dev/null
-	mylog "守护进程启动失败" "error" 2>/dev/null
+	echo "[$(date '+%m-%d %H:%M:%S')] [error]: 守护进程启动失败" >> "${LOG_PATH}" 2>/dev/null
 	echo "failed"
 	return 1
 }

@@ -162,7 +162,7 @@ getService() {
 		# Android 各版本 dumpsys 的权限名可能为 ACCESSIBILITY_SERVICE，
 		# 也可能输出 android.accessibilityservice.AccessibilityService。
 		# 先定位无障碍服务声明，再提取以包名开头的组件 token。
-		result="$(dumpsys package "${var}" 2>/dev/null \
+		result="$(timeout 10 dumpsys package "${var}" 2>/dev/null \
 			| grep -iE 'ACCESSIBILITY_SERVICE|android\.accessibilityservice\.AccessibilityService' \
 			| sed 's/ /\n/g' \
 			| grep -F "${var}/" \
@@ -264,7 +264,7 @@ is_in_list() {
 add_whitelist() {
 	local pkg
 	for pkg in ${1:-}; do
-		dumpsys deviceidle whitelist +"${pkg}" >/dev/null 2>&1
+		timeout 5 dumpsys deviceidle whitelist +"${pkg}" >/dev/null 2>&1
 	done
 	return 0
 }
